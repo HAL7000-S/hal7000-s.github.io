@@ -10,7 +10,7 @@ const transpile = code => ts.transpileModule(code, { compilerOptions: { target: 
 const dataUrl = asModule(transpile(await readFile('src/data.ts','utf8')));
 const data = await import(dataUrl);
 const mainSource = (await readFile('src/main.ts','utf8')).replace("import './style.css';", '').replace("from './data';", `from '${dataUrl}';`);
-const pages = [['/', 'Home', '.door', 4], ['/works/', 'Works', '.work-card', 5], ['/games/', 'Games', '.game-card', 4], ['/articles/', 'Articles', '.article-row', 3], ['/records/', 'Records', '.record', 3]];
+const pages = [['/', 'Home', '.door', 4], ['/works/', 'Works', '.work-card', 5], ['/games/', 'Games', '.game-card', 5], ['/articles/', 'Articles', '.article-row', 3], ['/records/', 'Records', '.record', 3]];
 const updates = data.recentUpdates();
 assert.equal(updates.length,5);
 assert(updates.every((entry,i) => !i || updates[i-1].updatedAt >= entry.updatedAt));
@@ -32,7 +32,15 @@ for (const [path,name,selector,count] of pages) {
    assert(sources[entryPath].some(item => item.id===id));
   }
  }
- if(name==='Games') assert.equal(document.querySelectorAll('.game-card a').length,0);
+ if(name==='Games') {
+  const card = document.querySelector('#bayesian-mcmc');
+  assert.equal(card.querySelector('h2').textContent, 'Bayesian MCMC Demo');
+  assert.equal(card.querySelector('.tag').textContent, '数学・確率統計・インタラクティブデモ');
+  assert.equal(card.querySelector('.status').textContent, '公開可能');
+  assert.equal(card.querySelector('a').getAttribute('href'), '/demos/bayesian-mcmc/index.html');
+  assert.equal(card.querySelector('a').target, '');
+  assert.equal(document.querySelectorAll('.game-card:not(#bayesian-mcmc) a').length,0);
+ }
  if(name==='Articles') {
   const buttons = [...document.querySelectorAll('[data-filter]')];
   buttons[1].click();
@@ -57,3 +65,4 @@ try { console.error=()=>{}; await mountAvatar(host,null); } finally { console.er
 assert.equal(host.dataset.mode,'fallback'); assert.equal(host.querySelectorAll('canvas').length,0); assert(host.querySelector('.fallback'));
 console.log('OK WebGL unavailable: 2D fallback');
 dom.window.close();
+await import('./check-mcmc.mjs');

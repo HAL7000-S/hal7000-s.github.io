@@ -50,7 +50,7 @@ vite.config.ts
 `src/data.ts` の配列を編集してください。仮データは掲載枠であり、本人の実績・制作状況を確定したものではありません。Worksの「保留（仮）」も初期データです。公開前に実情報で置換してください。
 
 - Works：`id`, `title`, `summary`, `category`, `updatedAt`, `status`, `technologies`。任意で `period`, `role`, `thumbnail`, `url`。
-- Games：`url` を省略すると「制作中・公開URL未定」。確定した独立したGitHub Pages URLのみ登録。ゲームのソースやアセットは入れない。
+- Games：`url` を省略すると「制作中・公開URL未定」。外部ゲームは確定した独立したGitHub Pages URLを登録し、ゲームのソースやアセットは入れない。このサイト内の軽量な静的デモは `/demos/.../index.html` も指定できる。`status` は任意で「公開可能」または「制作中」。
 - Articles：`category`, `publishedAt`（任意）, `updatedAt`, `url`（任意）など。カテゴリーのボタンはデータから自動生成。外部本文は複製しない。
 - Records：作った・学んだ・手放した、の記録を追加。未提供の個人情報は登録しない。
 - 全エントリ：`id` は一意で安定した英数字・ハイフンにする。日付は `YYYY-MM-DD`。画像は `public/images/` へ置き `/images/name.webp` のように指定。
@@ -84,6 +84,18 @@ git push -u origin main
 ## 今後の作業
 
 本人が確認したプロフィール・連絡先・作品画像・制作時期・技術・担当部分・記事URL・経験の追加。本物のGLBモデル、Markdown記事のビルド処理、任意のゲームiframeは今後の拡張です。AI会話・音声・ゲーム本体・大規模3D空間は今回実装していません。
+
+## Bayesian MCMC Demo
+
+`public/demos/bayesian-mcmc/index.html` に、提供されたHTMLをもとにした独立デモを配置。公開先は `/demos/bayesian-mcmc/index.html`（ユーザーサイト公開後は `https://hal7000-s.github.io/demos/bayesian-mcmc/index.html`）。Viteのpublicコピー機能を使い、そのままdistに含めます。追加のライブラリ・API・バックエンドはありません。
+
+登録情報は `src/data.ts` の `games` に集約し、Gamesカードから同じタブで起動できます。実装は単一HTML内のスタイル・計算関数・描画関数・入力と表示の節に分け、将来CSS/JSを切り出せる構成です。
+
+元コードの `logPosterior`、`normalRandom`、`mcmc`、`logFactorial`、`exactPdf` は変更していません。初期値θ=0.5、正規ランダムウォーク、範囲外提案の棄却、全反復での採択率、20%のburn-inも維持。入力の空欄・整数・範囲チェック、結果表示、軸・burn-in領域、戻るリンク、レスポンシブ表示を追加しています。20%の除外は収束を保証しません。
+
+`npm run build` 後の `npm run check` で、デモのコピー一致・直接HTTPアクセス・再リクエスト・Gamesカードを検証。`scripts/check-mcmc.mjs` は既存DOMテストから実行され、ビルド済みHTMLの実行、4入力の反映、不正入力18ケース、グラフ描画呼び出し、Beta密度の積分と理論平均、burn-in、Canvas非対応時を確認します。乱数はテスト内だけ固定し、公開デモは元のMath.randomを使用します。
+
+ブラウザーでもカードからの遷移、MCMC実行、H変更（理論平均0.75→0.25）、H>nの拒否、再読込、グラフ描画、390px幅で横スクロールが不要なことを確認。スマートフォン実機と公開後のGitHub Pagesは未確認です。
 
 ## 動作確認と制限
 

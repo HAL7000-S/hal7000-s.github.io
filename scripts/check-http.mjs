@@ -13,10 +13,11 @@ const server = createServer(async (req,res) => {
 try {
  await new Promise((done,reject) => { server.once('error',reject); server.listen(0,'127.0.0.1',done); });
  const base = `http://127.0.0.1:${server.address().port}`;
- for(const path of ['/','/works/','/games/','/articles/','/records/']) {
+ for(const path of ['/','/works/','/games/','/articles/','/records/','/demos/bayesian-mcmc/index.html']) {
   for(let attempt=0;attempt<2;attempt++) {
    const response = await fetch(`${base}${path}`); assert.equal(response.status,200);
    const html = await response.text();
+   if(path.includes('bayesian-mcmc')) assert.match(html, /<title>Bayesian MCMC Demo<\/title>/);
    for(const [,asset] of html.matchAll(/(?:src|href)="(\/assets\/[^"#]+)"/g)) assert.equal((await fetch(`${base}${asset}`)).status,200);
   }
   console.log(`OK ${path}: direct HTTP access, repeat request, assets (no SPA fallback)`);

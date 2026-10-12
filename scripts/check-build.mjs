@@ -11,3 +11,10 @@ for (const page of pages) {
  console.log(`OK ${page}: HTML and linked assets`);
 }
 await access('dist/favicon.svg');
+const demoPath = 'demos/bayesian-mcmc/index.html';
+const demo = await readFile(`dist/${demoPath}`, 'utf8');
+assert.equal(demo, await readFile(`public/${demoPath}`, 'utf8'), 'Vite must copy the standalone demo unchanged');
+assert.match(demo, /href="\/games\/"/);
+assert.match(demo, /function mcmc\(/);
+assert(!/<script[^>]+src=|<link[^>]+stylesheet/.test(demo), 'Demo must remain standalone');
+console.log(`OK ${demoPath}: standalone HTML copied unchanged`);

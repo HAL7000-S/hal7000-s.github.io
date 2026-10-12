@@ -1,0 +1,374 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="コイン投げの表の確率をMetropolis法で推定し、MCMCサンプルと理論的なBeta事後分布を比較するデモ。">
+<title>Bayesian MCMC Demo</title>
+<style>
+  :root { color-scheme: light; --blue: #284fda; --ink: #252c38; --muted: #626a76; --line: #d8d9d0; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, "Yu Gothic", Meiryo, sans-serif;
+    background: #f7f6ef;
+    color: var(--ink);
+    margin: 0;
+    padding: 28px 20px;
+    line-height: 1.8;
+  }
+  main {
+    max-width: 1040px;
+    margin: auto;
+  }
+  a { color: var(--blue); text-underline-offset: 4px; }
+  a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #d95436; outline-offset: 3px; }
+  .back { font-size: 13px; }
+  .eyebrow { font-size: 11px; color: var(--blue); letter-spacing: 2px; margin: 32px 0 10px; }
+  h1 { font-size: clamp(26px, 4vw, 42px); line-height: 1.3; letter-spacing: -.8px; margin: 0 0 16px; }
+  h2 { font-size: 18px; margin: 0 0 12px; }
+  p { margin: 0 0 15px; }
+  .intro { font-size: 14px; max-width: 760px; color: var(--muted); }
+  .panel { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 24px; margin: 24px 0; }
+  .formulas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 28px; margin: 0; font-size: 13px; }
+  .formulas dt { color: var(--muted); font-size: 11px; }
+  .formulas dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+  .formula { font-family: Georgia, "Times New Roman", serif; font-size: 17px; }
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    align-items: end;
+  }
+  label { display: grid; gap: 5px; font-size: 13px; }
+  input { min-width: 0; width: 100%; padding: 10px; font: inherit; border: 1px solid #aab2bf; border-radius: 4px; background: #fff; color: var(--ink); }
+  button { padding: 11px 22px; cursor: pointer; font: inherit; font-size: 14px; background: var(--blue); color: white; border: 0; border-radius: 4px; min-height: 44px; }
+  button:hover { background: #193bab; }
+  .form-actions { display: flex; align-items: center; gap: 20px; margin-top: 18px; }
+  .hint, .caption { font-size: 12px; color: var(--muted); }
+  .hint { margin: 0; }
+  #error { color: #a32b18; font-size: 13px; margin-top: 14px; }
+  #error:empty { display: none; }
+  #result { font-size: 13px; color: var(--muted); }
+  .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; margin: 0 0 20px; }
+  .metrics div { background: #edf1fc; border-radius: 4px; padding: 14px 16px; }
+  .metrics dt { font-size: 11px; color: var(--muted); }
+  .metrics dd { margin: 5px 0 0; font-size: 25px; line-height: 1.4; font-variant-numeric: tabular-nums; color: var(--blue); }
+  .legend { display: flex; flex-wrap: wrap; gap: 20px; font-size: 12px; }
+  .legend span::before { content: ''; display: inline-block; width: 16px; height: 8px; background: #93c5fd; margin-right: 7px; }
+  .legend span:last-child::before { background: #dc2626; height: 3px; vertical-align: middle; }
+  canvas { display: block; width: 100%; height: auto; }
+  .caption { margin: 12px 0 0; }
+  .burn-note { font-size: 13px; padding: 16px 20px; border-left: 3px solid #d95436; background: #f0eee5; }
+  footer { font-size: 12px; padding: 20px 0; border-top: 1px solid var(--line); }
+  [hidden] { display: none !important; }
+  @media (max-width: 600px) {
+    body { padding: 20px 14px; }
+    .panel { padding: 18px 14px; }
+    .controls, .formulas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .formulas { grid-template-columns: 1fr; }
+    .form-actions { align-items: start; flex-direction: column; gap: 12px; }
+    button { width: 100%; }
+    .metrics { grid-template-columns: 1fr; gap: 8px; }
+    .metrics div { display: flex; justify-content: space-between; align-items: center; }
+    .metrics dd { margin: 0; font-size: 23px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="/games/">← Games一覧へ戻る</a>
+  <p class="eyebrow">PROBABILITY / INTERACTIVE LAB</p>
+  <h1>Bayesian MCMC Demo</h1>
+  <p class="intro">コイン投げの観測から、表の出る確率 θ をランダムウォークMetropolis法で推定します。青いヒストグラムと赤い理論曲線を比べてみてください。毎回、異なる乱数で計算します。</p>
+  <section class="panel" aria-labelledby="model-heading">
+    <h2 id="model-heading">コイン投げを、ベイズ推論で</h2>
+    <dl class="formulas">
+      <div><dt>事前分布</dt><dd class="formula">θ ∼ Beta(1, 1)</dd></div>
+      <div><dt>観測</dt><dd>n回のコイン投げで、表がH回</dd></div>
+      <div><dt>事後分布</dt><dd class="formula">θ | H, n ∼ Beta(H + 1, n − H + 1)</dd></div>
+      <div><dt>理論平均</dt><dd class="formula">E[θ | H, n] = (H + 1) / (n + 2)</dd></div>
+    </dl>
+    <p class="caption">対数事後密度は H log θ + (n − H) log(1 − θ)（定数を除く）。θ′ = θ + σZ、Z ∼ N(0, 1) を提案し、事後密度の比に従って採択します。0 &lt; θ′ &lt; 1 の外は棄却します。</p>
+  </section>
+
+  <section class="panel" aria-labelledby="controls-heading">
+  <h2 id="controls-heading">観測とサンプリングの設定</h2>
+  <form id="controls" novalidate>
+  <div class="controls">
+    <label>試行回数 n
+      <input id="n" type="number" min="1" max="100" step="1" value="10" required aria-describedby="input-hint error">
+    </label>
+    <label>表の回数 H
+      <input id="h" type="number" min="0" max="100" step="1" value="8" required aria-describedby="input-hint error">
+    </label>
+    <label>提案幅 σ
+      <input id="sigma" type="number" min="0" step="any" value="0.15" required aria-describedby="input-hint error">
+    </label>
+    <label>反復回数
+      <input id="steps" type="number" min="100" max="100000" step="1" value="12000" required aria-describedby="input-hint error">
+    </label>
+  </div>
+  <div class="form-actions"><button id="run" type="submit">MCMCを実行</button><p class="hint" id="input-hint">n：1〜100の整数、H：0〜nの整数<br>σ：0より大きい有限値、反復回数：100〜100,000の整数</p></div>
+  <p id="error" role="alert"></p>
+  </form>
+  </section>
+
+  <section aria-label="計算結果">
+    <p id="result" role="status" aria-live="polite"></p>
+    <dl id="metrics" class="metrics" hidden>
+      <div><dt>理論平均</dt><dd id="exact-mean">—</dd></div>
+      <div><dt>MCMC推定平均</dt><dd id="mcmc-mean">—</dd></div>
+      <div><dt>採択率（全反復）</dt><dd id="acceptance">—</dd></div>
+    </dl>
+  </section>
+  <section class="panel" aria-labelledby="hist-heading">
+    <h2 id="hist-heading">事後分布：ヒストグラムと理論曲線</h2>
+    <div class="legend"><span>MCMCサンプル（burn-in除外後）</span><span>理論Beta事後分布</span></div>
+    <canvas id="hist" width="800" height="340" role="img" aria-label="表の確率θを横軸、確率密度を縦軸にしたMCMCヒストグラムと理論Beta分布">グラフの表示にはCanvas対応ブラウザーが必要です。</canvas>
+    <p class="caption">横軸：表の確率 θ ／ 縦軸：確率密度。ヒストグラムは50区間で正規化しています。</p>
+  </section>
+  <section class="panel" aria-labelledby="trace-heading">
+    <h2 id="trace-heading">Markov連鎖のトレース</h2>
+    <canvas id="trace" width="800" height="180" role="img" aria-label="反復番号を横軸、表の確率θを縦軸にしたMarkov連鎖のトレース。左側の薄い領域はburn-in">グラフの表示にはCanvas対応ブラウザーが必要です。</canvas>
+    <p class="caption">横軸：反復番号 ／ 縦軸：θ。トレースにはburn-inを含む全反復を表示し、描画点だけを間引いています。薄い背景は除外する最初の20%です。</p>
+  </section>
+  <p class="burn-note">最初の20%をburn-inとして除外するのは便宜的な設定であり、収束を保証するものではありません。採択率だけでも収束は判断できません。σや反復回数を変えて、トレースと理論分布を比較してください。</p>
+  <noscript><p>このデモの計算とグラフ表示にはJavaScriptが必要です。</p></noscript>
+  <footer><a href="/games/">← Games一覧へ戻る</a></footer>
+</main>
+
+<script>
+// 正規化定数を除いた対数事後密度
+function logPosterior(theta, h, n) {
+  if (theta <= 0 || theta >= 1) return -Infinity;
+  return h * Math.log(theta)
+       + (n - h) * Math.log1p(-theta);
+}
+
+// Box-Muller法：標準正規乱数
+function normalRandom() {
+  const u = 1 - Math.random();
+  const v = Math.random();
+  return Math.sqrt(-2 * Math.log(u))
+       * Math.cos(2 * Math.PI * v);
+}
+
+// Metropolis法
+function mcmc(h, n, sigma, steps) {
+  let theta = 0.5;
+  let accepted = 0;
+  const chain = [];
+
+  for (let i = 0; i < steps; i++) {
+    const proposal = theta + sigma * normalRandom();
+    const logRatio = logPosterior(proposal, h, n)
+                   - logPosterior(theta, h, n);
+
+    if (Math.log(Math.random()) < logRatio) {
+      theta = proposal;
+      accepted++;
+    }
+    chain.push(theta);
+  }
+
+  // 最初の20%をburn-inとして除外
+  const burn = Math.floor(steps * 0.2);
+  return {
+    chain,
+    samples: chain.slice(burn),
+    acceptance: accepted / steps
+  };
+}
+
+// log(k!)
+function logFactorial(k) {
+  let result = 0;
+  for (let i = 2; i <= k; i++) result += Math.log(i);
+  return result;
+}
+
+// 理論分布 Beta(H+1, n-H+1) の密度
+function exactPdf(theta, h, n) {
+  const logC = logFactorial(n + 1)
+             - logFactorial(h)
+             - logFactorial(n - h);
+  return Math.exp(
+    logC + h * Math.log(theta)
+    + (n - h) * Math.log1p(-theta)
+  );
+}
+
+// ヒストグラムと理論曲線
+function drawHistogram(samples, h, n) {
+  const canvas = document.getElementById("hist");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvasの2D表示に対応したブラウザーが必要です。");
+  const left = 45, right = 780, top = 20, bottom = 300;
+  const bins = 50;
+  const counts = Array(bins).fill(0);
+
+  for (const theta of samples) {
+    counts[Math.min(bins - 1, Math.floor(theta * bins))]++;
+  }
+
+  const density = counts.map(c => c * bins / samples.length);
+  const exact = Array.from({length: 201}, (_, i) =>
+    exactPdf((i + 0.5) / 201, h, n)
+  );
+  const ymax = Math.max(...density, ...exact) * 1.15;
+  const scale = (bottom - top) / ymax;
+  const barWidth = (right - left) / bins;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // MCMCヒストグラム
+  ctx.fillStyle = "#93c5fd";
+  density.forEach((y, i) => {
+    ctx.fillRect(
+      left + i * barWidth,
+      bottom - y * scale,
+      barWidth - 1,
+      y * scale
+    );
+  });
+
+  // 理論曲線
+  ctx.strokeStyle = "#dc2626";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  exact.forEach((y, i) => {
+    const x = left + ((i + 0.5) / 201) * (right - left);
+    const py = bottom - y * scale;
+    if (i === 0) ctx.moveTo(x, py);
+    else ctx.lineTo(x, py);
+  });
+  ctx.stroke();
+
+  // 軸
+  ctx.strokeStyle = "#333";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(left, top);
+  ctx.lineTo(left, bottom);
+  ctx.lineTo(right, bottom);
+  ctx.stroke();
+
+  ctx.fillStyle = "#333";
+  // CSSで縮小されたモバイル画面でも軸の文字を読める大きさにする。
+  ctx.font = `${Math.max(13, Math.min(26, 13 * canvas.width / (canvas.clientWidth || canvas.width)))}px sans-serif`;
+  for (let i = 0; i <= 4; i++) {
+    const x = left + i * (right - left) / 4;
+    ctx.fillText((i / 4).toFixed(2), x - 12, bottom + 20);
+  }
+  for (let i = 0; i <= 4; i++) {
+    const y = ymax * i / 4;
+    ctx.fillText(ymax >= 10 ? y.toFixed(0) : y.toFixed(1), 4, bottom - y * scale + 4);
+  }
+}
+
+// MCMCサンプルの軌跡
+function drawTrace(chain) {
+  const canvas = document.getElementById("trace");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvasの2D表示に対応したブラウザーが必要です。");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // burn-in領域と座標軸。連鎖そのものは変更しない。
+  const burn = Math.floor(chain.length * 0.2);
+  ctx.fillStyle = "#f0eee5";
+  ctx.fillRect(35, 25, 745 * burn / (chain.length - 1), 130);
+  ctx.strokeStyle = "#333";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(35, 25);
+  ctx.lineTo(35, 155);
+  ctx.lineTo(780, 155);
+  ctx.stroke();
+  ctx.fillStyle = "#333";
+  ctx.font = `${Math.max(13, Math.min(22, 13 * canvas.width / (canvas.clientWidth || canvas.width)))}px sans-serif`;
+  for (let i = 0; i <= 2; i++) {
+    ctx.fillText((i / 2).toFixed(1), 2, 159 - 130 * i / 2);
+    const iteration = Math.round((chain.length - 1) * i / 2) + 1;
+    ctx.fillText(String(iteration), 35 + 745 * i / 2 - (i === 2 ? 45 : 0), 175);
+  }
+
+  ctx.strokeStyle = "#2563eb";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+
+  // 描画点を間引く
+  const stride = Math.max(1, Math.floor(chain.length / 700));
+
+  for (let i = 0; i < chain.length; i += stride) {
+    const x = 35 + 745 * i / (chain.length - 1);
+    const y = 155 - 130 * chain[i];
+
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+// 入力・表示は計算関数から分離。将来はこの節と描画関数を別ファイルに切り出せる。
+function runDemo(event) {
+  if (event) event.preventDefault();
+  const n = Number(document.getElementById("n").value);
+  const h = Number(document.getElementById("h").value);
+  const sigma = Number(document.getElementById("sigma").value);
+  const steps = Number(document.getElementById("steps").value);
+  const result = document.getElementById("result");
+  const error = document.getElementById("error");
+  const inputs = ["n", "h", "sigma", "steps"].map(id => document.getElementById(id));
+  error.textContent = "";
+  inputs.forEach(input => input.removeAttribute("aria-invalid"));
+
+  const valid = [
+    Number.isInteger(n) && n >= 1 && n <= 100,
+    Number.isInteger(h) && h >= 0 && h <= n,
+    Number.isFinite(sigma) && sigma > 0,
+    Number.isInteger(steps) && steps >= 100 && steps <= 100000
+  ];
+  const invalid = inputs.findIndex((input, i) => input.value.trim() === "" || !valid[i]);
+  if (invalid !== -1) {
+    inputs.forEach((input, i) => { if (input.value.trim() === "" || !valid[i]) input.setAttribute("aria-invalid", "true"); });
+    error.textContent = "入力値を確認してください。nは1〜100の整数、Hは0〜nの整数、σは0より大きい有限値、反復回数は100〜100,000の整数です。";
+    result.textContent = "入力エラー：結果とグラフを非表示にしました。値を修正して再実行してください。";
+    document.getElementById("metrics").hidden = true;
+    document.querySelectorAll("canvas").forEach(canvas => { canvas.hidden = true; });
+    inputs[invalid].focus();
+    return;
+  }
+
+  const out = mcmc(h, n, sigma, steps);
+  const mean = out.samples.reduce((a, b) => a + b, 0)
+             / out.samples.length;
+  const exactMean = (h + 1) / (n + 2);
+
+  result.textContent =
+    `事後分布: Beta(${h + 1}, ${n - h + 1}) | ` +
+    `理論平均: ${exactMean.toFixed(4)} | ` +
+    `MCMC平均: ${mean.toFixed(4)} | ` +
+    `採択率: ${(100 * out.acceptance).toFixed(1)}%`;
+
+  document.getElementById("exact-mean").textContent = exactMean.toFixed(4);
+  document.getElementById("mcmc-mean").textContent = mean.toFixed(4);
+  document.getElementById("acceptance").textContent = `${(100 * out.acceptance).toFixed(1)}%`;
+  document.getElementById("metrics").hidden = false;
+  document.getElementById("hist").setAttribute("aria-label", `Beta(${h + 1}, ${n - h + 1})の理論曲線とMCMCヒストグラム。理論平均${exactMean.toFixed(4)}、MCMC平均${mean.toFixed(4)}`);
+  document.querySelectorAll("canvas").forEach(canvas => { canvas.hidden = false; });
+  try {
+    drawHistogram(out.samples, h, n);
+    drawTrace(out.chain);
+  } catch (cause) {
+    document.querySelectorAll("canvas").forEach(canvas => { canvas.hidden = true; });
+    error.textContent = cause instanceof Error ? cause.message : "グラフを表示できませんでした。";
+  }
+}
+document.getElementById("controls").addEventListener("submit", runDemo);
+
+// 初回自動実行
+runDemo();
+</script>
+</body>
+</html>
