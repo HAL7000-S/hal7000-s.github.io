@@ -13,7 +13,7 @@ const server = createServer(async (req,res) => {
 try {
  await new Promise((done,reject) => { server.once('error',reject); server.listen(0,'127.0.0.1',done); });
  const base = `http://127.0.0.1:${server.address().port}`;
- for(const path of ['/','/works/','/games/','/articles/','/records/','/demos/bayesian-mcmc/index.html']) {
+ for(const path of ['/','/works/','/games/','/articles/','/records/','/hand-joint/','/demos/bayesian-mcmc/index.html']) {
   for(let attempt=0;attempt<2;attempt++) {
    const response = await fetch(`${base}${path}`); assert.equal(response.status,200);
    const html = await response.text();
